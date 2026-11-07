@@ -79,7 +79,11 @@ window.csv=()=>dl('report.csv','\ufeff'+['তারিখ,রসিদ,ধরন
 window.backup=async()=>{const o={};for(const t of['members','accounts','loans','loan_installments','transactions','notices','audit_log'])o[t]=ck(await db.from(t).select('*'));dl(`backup-${today()}.json`,JSON.stringify(o),'application/json')};
 window.out=async()=>{await db.auth.signOut();location.reload()};
 function arm(){clearTimeout(idle);idle=setTimeout(()=>{toast('নিষ্ক্রিয়তার কারণে সেশন শেষ',1);out()},15*60000)}
-async function boot(){const{data:{session}}=await db.auth.getSession();if(!session)return;
+async function boot(){const{data:{session}}=await db.auth.getSession();if(!session){
+  $('#app').hidden=true;
+  $('#login').hidden=false;
+  return;
+}
  const pr=await db.from('profiles').select('*').eq('id',session.user.id).single();if(pr.error){await db.auth.signOut();throw pr.error}const p=pr.data;if(!p||!p.is_active){await db.auth.signOut();return toast('অ্যাকাউন্ট সক্রিয় নয়',1)}
  me=p;staff=p.role!='member';$('#login').hidden=true;$('#app').hidden=false;$('#nav').innerHTML=MENU.filter(m=>staff||!m[2]).map(m=>`<a data-v="${m[0]}" onclick="go('${m[0]}')">${m[1]}</a>`).join('')+'<a onclick="out()">লগআউট</a>';
  ['click','keydown','touchstart'].forEach(v=>addEventListener(v,arm));arm();go('dash')}
