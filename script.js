@@ -78,7 +78,22 @@ window.rej=async id=>{try{ck(await db.from('transactions').update({status:'rejec
 const dl=(n,t,m)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click()};
 window.csv=()=>dl('report.csv','\ufeff'+['তারিখ,রসিদ,ধরন,সদস্য,পরিমাণ,বিবরণ',...(window.RR||[]).map(t=>[dt(t.txn_date),t.receipt_no,TY[t.type],t.members?.full_name||'',t.amount,t.note||''].map(x=>`"${String(x).replace(/"/g,'""')}"`).join(','))].join('\n'),'text/csv');
 window.backup=async()=>{const o={};for(const t of['members','accounts','loans','loan_installments','transactions','notices','audit_log'])o[t]=ck(await db.from(t).select('*'));dl(`backup-${today()}.json`,JSON.stringify(o),'application/json')};
-window.out=async()=>{await db.auth.signOut();location.reload()};
+window.out = async () => {
+  try {
+    await db.auth.signOut();
+  } catch (err) {
+    console.warn('Remote sign out failed:', err);
+  }
+
+  for (const key of Object.keys(localStorage)) {
+    if (key.includes('auth-token')) {
+      localStorage.removeItem(key);
+    }
+  }
+
+  location.reload();
+};
+
 function arm(){clearTimeout(idle);idle=setTimeout(()=>{toast('নিষ্ক্রিয়তার কারণে সেশন শেষ',1);out()},15*60000)}
 async function boot(){const{data:{session}}=await db.auth.getSession();if(!session)return;
  const q=await db.from('profiles').select('*').eq('id',session.user.id).single(),p=q.data;if(!p||!p.is_active){await db.auth.signOut();return toast('প্রোফাইল পাওয়া যায়নি বা নিষ্ক্রিয়: '+(q.error?.message||'profiles টেবিলে এই ইউজারের সারি নেই'),1)}
