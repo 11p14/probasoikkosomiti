@@ -12,8 +12,8 @@ const toast=(m,er)=>{const d=document.createElement('div');d.textContent=m;if(er
 const ck=r=>{if(r.error)throw new Error(r.error.message);return r.data};
 const tbl=(h,r)=>`<div class="tw"><table><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${r.map(x=>`<tr>${x.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${h.length}">কোনো তথ্য নেই</td></tr>`}</table></div>`;
 const opts=(a,v,l)=>a.map(x=>`<option value="${x[v]}">${e(typeof l=='function'?l(x):x[l])}</option>`).join('');
-const mOpts=async()=>opts(ck(await db.from('members').select('id,member_no,full_name').eq('status','active').order('member_no')),'id',m=>m.member_no+' - '+m.full_name);
-const aOpts=async()=>opts(ck(await db.from('accounts').select('id,name').eq('is_active',true)),'id','name');
+const mOpts=async()=>{const r=ck(await db.from('members').select('id,member_no,full_name').eq('status','active').order('member_no'));if(!r.length)throw new Error('কোনো সক্রিয় সদস্য নেই। আগে "সদস্য ব্যবস্থাপনা" থেকে সদস্য যোগ করুন।');return opts(r,'id',m=>m.member_no+' - '+m.full_name)};
+const aOpts=async()=>{const r=ck(await db.from('accounts').select('id,name').eq('is_active',true));if(!r.length)throw new Error('কোনো হিসাব নেই। আগে "ক্যাশ ও ব্যাংক" পেজ থেকে হিসাব (যেমন নগদ) যোগ করুন।');return opts(r,'id','name')};
 const FH={};document.addEventListener('submit',ev=>{const h=FH[ev.target.id];if(h){ev.preventDefault();h(ev)}});
 function form(id,fields,btn,fn){let k=crypto.randomUUID();
  const h=`<form id="${id}" class="card">${fields.map(([n,l,t,o])=>`<label>${l}${t=='select'?`<select name="${n}" required>${o}</select>`:t=='area'?`<textarea name="${n}"></textarea>`:`<input name="${n}" type="${t}" ${t=='number'?'step="0.01" min="0"':''} ${t=='date'?`value="${today()}"`:''} ${o==='opt'?'':'required'}>`}</label>`).join('')}<button class="btn">${btn}</button></form>`;
@@ -81,12 +81,12 @@ window.backup=async()=>{const o={};for(const t of['members','accounts','loans','
 window.out=async()=>{await db.auth.signOut();location.reload()};
 function arm(){clearTimeout(idle);idle=setTimeout(()=>{toast('নিষ্ক্রিয়তার কারণে সেশন শেষ',1);out()},15*60000)}
 async function boot(){const{data:{session}}=await db.auth.getSession();if(!session)return;
- const p=(await db.from('profiles').select('*').eq('id',session.user.id).single()).data;if(!p||!p.is_active){await db.auth.signOut();return toast('অ্যাকাউন্ট সক্রিয় নয়',1)}
+ const q=await db.from('profiles').select('*').eq('id',session.user.id).single(),p=q.data;if(!p||!p.is_active){await db.auth.signOut();return toast('প্রোফাইল পাওয়া যায়নি বা নিষ্ক্রিয়: '+(q.error?.message||'profiles টেবিলে এই ইউজারের সারি নেই'),1)}
  me=p;staff=p.role!='member';$('#login').hidden=true;$('#app').hidden=false;$('#nav').innerHTML=MENU.filter(m=>staff||!m[2]).map(m=>`<a data-v="${m[0]}" onclick="go('${m[0]}')">${m[1]}</a>`).join('')+'<a onclick="out()">লগআউট</a>';
  ['click','keydown','touchstart'].forEach(v=>addEventListener(v,arm));arm();go('dash')}
 $('#lf').onsubmit=async ev=>{ev.preventDefault();const d=new FormData(ev.target),b=ev.target.querySelector('button');b.disabled=true;
- const r=await db.auth.signInWithPassword({email:d.get('u').trim().toLowerCase()+'@proboshoikko.local',password:d.get('p')});b.disabled=false;
- if(r.error)return toast('ইউজারনেম বা পাসওয়ার্ড ভুল',1);boot()};
+ const r=await db.auth.signInWithPassword({email:(u=>u.includes('@')?u:u+'@proboshoikko.local')(d.get('u').trim().toLowerCase()),password:d.get('p')});b.disabled=false;
+ if(r.error)return toast('লগইন ব্যর্থ: '+r.error.message,1);boot()};
 $('#mb').onclick=()=>$('#nav').classList.toggle('open');
 addEventListener('beforeinstallprompt',ev=>{ev.preventDefault();dip=ev;$('#inst').hidden=false});$('#inst').onclick=()=>{dip.prompt();$('#inst').hidden=true};
 if('serviceWorker'in navigator)navigator.serviceWorker.register('service-worker.js').then(r=>r.addEventListener('updatefound',()=>{const w=r.installing;w.addEventListener('statechange',()=>{if(w.state=='installed'&&navigator.serviceWorker.controller){$('#upd').hidden=false;$('#updb').onclick=()=>{w.postMessage('skip');location.reload()}}})}));
