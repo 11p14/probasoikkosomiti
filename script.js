@@ -18,8 +18,43 @@ function form(id,fields,btn,fn){let k=crypto.randomUUID();
  const h=`<form id="${id}" class="card">${fields.map(([n,l,t,o])=>`<label>${l}${t=='select'?`<select name="${n}" required>${o}</select>`:t=='area'?`<textarea name="${n}"></textarea>`:`<input name="${n}" type="${t}" ${t=='number'?'step="0.01" min="0"':''} ${t=='date'?`value="${today()}"`:''} ${o==='opt'?'':'required'}>`}</label>`).join('')}<button class="btn">${btn}</button></form>`;
  setTimeout(()=>{$('#'+id).onsubmit=async ev=>{ev.preventDefault();const b=ev.target.querySelector('button');b.disabled=true;
   try{if(!navigator.onLine)throw new Error('ইন্টারনেট নেই; লেনদেন সার্ভারে সংরক্ষিত হয়নি');const data=Object.fromEntries(new FormData(ev.target));for(const [name,value] of Object.entries(data)){if(['amount','principal','term','rate','monthly_saving'].includes(name)&&value!==''&&(!Number.isFinite(Number(value))||Number(value)<0))throw new Error('সংখ্যার মান সঠিক নয়');}if(data.amount!==undefined&&Number(data.amount)<=0)throw new Error('পরিমাণ শূন্যের বেশি হতে হবে');if(data.principal!==undefined&&Number(data.principal)<=0)throw new Error('ঋণের পরিমাণ শূন্যের বেশি হতে হবে');if(data.term!==undefined&&(!Number.isInteger(Number(data.term))||Number(data.term)<=0))throw new Error('ঋণের মেয়াদ পূর্ণ মাস হতে হবে');await fn(data,k);k=crypto.randomUUID();ev.target.reset()}catch(x){toast(x.message,1)}b.disabled=false}});return h}
-async function addTxn(r,k){const t=ck(await db.from('transactions').insert({...r,idem_key:k,created_by:me.id}).select('*,members(full_name,member_no)').single());
- if(t.status=='pending')toast('উত্তোলন অনুমোদনের অপেক্ষায়');else toast('সংরক্ষিত হয়েছে');receipt(t);go(cur)}
+async function addTxn(r,k){
+  try {
+    if(!me?.id) throw new Error('লগইন সেশন পাওয়া যায়নি');
+
+    const payload={
+      ...r,
+      amount:Number(r.amount),
+      created_by:me.id,
+      idem_key:k
+    };
+
+    const {data,error}=await db
+      .from('transactions')
+      .insert(payload)
+      .select('*,members(full_name,member_no)')
+      .single();
+
+    if(error){
+      console.error('Transaction Error:',error);
+      throw new Error(
+        error.message+
+        '\nCode: '+error.code+
+        '\nDetails: '+error.details+
+        '\nHint: '+error.hint
+      );
+    }
+
+    toast('লেনদেন সফলভাবে সংরক্ষিত হয়েছে');
+    receipt(data);
+    go(cur);
+
+  } catch(err) {
+    console.error(err);
+    alert('লেনদেন ব্যর্থ হয়েছে:\n\n'+err.message);
+    throw err;
+  }
+}
 function receipt(t){const m=$('#modal');m.hidden=false;m.innerHTML=`<div class="card pr"><h2 style="text-align:center;color:#14532d;margin:0">প্রবাস ঐক্য সমিতি</h2><p style="text-align:center">ঐক্যে সঞ্চয়, বিশ্বাসে সমৃদ্ধি।</p><hr>
 <p>রসিদ নং: <b>${e(t.receipt_no)}</b><br>তারিখ: ${dt(t.txn_date)}<br>সদস্য: ${e(t.members?.full_name||'-')} (আইডি: ${t.members?.member_no??'-'})<br>ধরন: ${TY[t.type]}<br>পরিমাণ: <b>${tk(t.amount)}</b><br>স্থিতি: ${t.status=='approved'?'অনুমোদিত':'অনুমোদনের অপেক্ষায়'}<br>গ্রহণকারী: ${e(me.username)}<br>অনুমোদনকারী: ${t.approved_by?e(me.username):'-'}</p>
 <div class="np"><button class="btn" onclick="print()">প্রিন্ট</button> <button class="btn alt" onclick="$('#modal').hidden=true">বন্ধ করুন</button></div></div>`}
