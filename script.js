@@ -83,10 +83,43 @@ async function boot(){const{data:{session}}=await db.auth.getSession();if(!sessi
  const pr=await db.from('profiles').select('*').eq('id',session.user.id).single();if(pr.error){await db.auth.signOut();throw pr.error}const p=pr.data;if(!p||!p.is_active){await db.auth.signOut();return toast('অ্যাকাউন্ট সক্রিয় নয়',1)}
  me=p;staff=p.role!='member';$('#login').hidden=true;$('#app').hidden=false;$('#nav').innerHTML=MENU.filter(m=>staff||!m[2]).map(m=>`<a data-v="${m[0]}" onclick="go('${m[0]}')">${m[1]}</a>`).join('')+'<a onclick="out()">লগআউট</a>';
  ['click','keydown','touchstart'].forEach(v=>addEventListener(v,arm));arm();go('dash')}
-$('#lf').onsubmit=async ev=>{ev.preventDefault();const d=new FormData(ev.target),b=ev.target.querySelector('button');b.disabled=true;
- try{const r=await db.auth.signInWithPassword({email:d.get('u').trim().toLowerCase(),password:d.get('p')});if(r.error)throw r.error;await boot()}
- catch(err){toast(err.message||'লগইন করা যায়নি; ইন্টারনেট ও Supabase সেটিংস পরীক্ষা করুন',1)}
- finally{b.disabled=false}};
+$('#lf').onsubmit = async ev => {
+  ev.preventDefault();
+
+  const d = new FormData(ev.target);
+  const b = ev.target.querySelector('button');
+  b.disabled = true;
+
+  try {
+    const email = d.get('u').trim().toLowerCase();
+    const password = d.get('p');
+
+    const { data, error } = await db.auth.signInWithPassword({
+      email: email,
+      password: password
+    });
+
+    if (error) throw error;
+
+    const { data: profile, error: pe } = await db
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
+
+    if (pe) throw pe;
+    if (!profile || !profile.is_active)
+      throw new Error('Admin Profile পাওয়া যায়নি বা নিষ্ক্রিয়');
+
+    await boot();
+
+  } catch (err) {
+    toast('Login Error: ' + err.message, true);
+    console.error(err);
+  }
+
+  b.disabled = false;
+};
 $('#mb').onclick=()=>$('#nav').classList.toggle('open');
 addEventListener('beforeinstallprompt',ev=>{ev.preventDefault();dip=ev;$('#inst').hidden=false});$('#inst').onclick=()=>{dip.prompt();$('#inst').hidden=true};
 if('serviceWorker'in navigator)navigator.serviceWorker.register('service-worker.js').then(r=>r.addEventListener('updatefound',()=>{const w=r.installing;w.addEventListener('statechange',()=>{if(w.state=='installed'&&navigator.serviceWorker.controller){$('#upd').hidden=false;$('#updb').onclick=()=>{w.postMessage('skip');location.reload()}}})}));
