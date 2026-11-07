@@ -84,7 +84,7 @@ async function boot(){const{data:{session}}=await db.auth.getSession();if(!sessi
  me=p;staff=p.role!='member';$('#login').hidden=true;$('#app').hidden=false;$('#nav').innerHTML=MENU.filter(m=>staff||!m[2]).map(m=>`<a data-v="${m[0]}" onclick="go('${m[0]}')">${m[1]}</a>`).join('')+'<a onclick="out()">লগআউট</a>';
  ['click','keydown','touchstart'].forEach(v=>addEventListener(v,arm));arm();go('dash')}
 $('#lf').onsubmit=async ev=>{ev.preventDefault();const d=new FormData(ev.target),b=ev.target.querySelector('button');b.disabled=true;
- try{const r=await db.auth.signInWithPassword({email:d.get('u').trim().toLowerCase()+'@proboshoikko.local',password:d.get('p')});if(r.error)throw r.error;await boot()}
+ try{const r=await db.auth.signInWithPassword({email:d.get('u').trim().toLowerCase(),password:d.get('p')});if(r.error)throw r.error;await boot()}
  catch(err){toast(err.message||'লগইন করা যায়নি; ইন্টারনেট ও Supabase সেটিংস পরীক্ষা করুন',1)}
  finally{b.disabled=false}};
 $('#mb').onclick=()=>$('#nav').classList.toggle('open');
