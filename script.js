@@ -5,7 +5,7 @@ let me,staff,idle,dip;
 const e=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const tk=n=>'৳ '+Number(n||0).toLocaleString('bn-BD',{maximumFractionDigits:2});
 const dt=d=>d?d.slice(0,10).split('-').reverse().join('-'):'';
-const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Dhaka'});
 const TY={saving_deposit:'মাসিক সঞ্চয়',extra_deposit:'অতিরিক্ত সঞ্চয়',special_deposit:'বিশেষ সঞ্চয়',withdrawal:'উত্তোলন',loan_disbursement:'ঋণ বিতরণ',loan_repayment:'কিস্তি আদায়',income:'আয়',expense:'ব্যয়',transfer_out:'স্থানান্তর (বহির্গমন)',transfer_in:'স্থানান্তর (আগমন)'};
 const IN=['saving_deposit','extra_deposit','special_deposit','loan_repayment','income','transfer_in'];
 const toast=(m,er)=>{const d=document.createElement('div');d.textContent=m;if(er)d.className='er';$('#toast').append(d);setTimeout(()=>d.remove(),4500)};
@@ -14,47 +14,13 @@ const tbl=(h,r)=>`<div class="tw"><table><tr>${h.map(x=>`<th>${x}</th>`).join(''
 const opts=(a,v,l)=>a.map(x=>`<option value="${x[v]}">${e(typeof l=='function'?l(x):x[l])}</option>`).join('');
 const mOpts=async()=>opts(ck(await db.from('members').select('id,member_no,full_name').eq('status','active').order('member_no')),'id',m=>m.member_no+' - '+m.full_name);
 const aOpts=async()=>opts(ck(await db.from('accounts').select('id,name').eq('is_active',true)),'id','name');
+const FH={};document.addEventListener('submit',ev=>{const h=FH[ev.target.id];if(h){ev.preventDefault();h(ev)}});
 function form(id,fields,btn,fn){let k=crypto.randomUUID();
  const h=`<form id="${id}" class="card">${fields.map(([n,l,t,o])=>`<label>${l}${t=='select'?`<select name="${n}" required>${o}</select>`:t=='area'?`<textarea name="${n}"></textarea>`:`<input name="${n}" type="${t}" ${t=='number'?'step="0.01" min="0"':''} ${t=='date'?`value="${today()}"`:''} ${o==='opt'?'':'required'}>`}</label>`).join('')}<button class="btn">${btn}</button></form>`;
- setTimeout(()=>{$('#'+id).onsubmit=async ev=>{ev.preventDefault();const b=ev.target.querySelector('button');b.disabled=true;
-  try{if(!navigator.onLine)throw new Error('ইন্টারনেট নেই; লেনদেন সার্ভারে সংরক্ষিত হয়নি');const data=Object.fromEntries(new FormData(ev.target));for(const [name,value] of Object.entries(data)){if(['amount','principal','term','rate','monthly_saving'].includes(name)&&value!==''&&(!Number.isFinite(Number(value))||Number(value)<0))throw new Error('সংখ্যার মান সঠিক নয়');}if(data.amount!==undefined&&Number(data.amount)<=0)throw new Error('পরিমাণ শূন্যের বেশি হতে হবে');if(data.principal!==undefined&&Number(data.principal)<=0)throw new Error('ঋণের পরিমাণ শূন্যের বেশি হতে হবে');if(data.term!==undefined&&(!Number.isInteger(Number(data.term))||Number(data.term)<=0))throw new Error('ঋণের মেয়াদ পূর্ণ মাস হতে হবে');await fn(data,k);k=crypto.randomUUID();ev.target.reset()}catch(x){toast(x.message,1)}b.disabled=false}});return h}
-async function addTxn(r,k){
-  try {
-    if(!me?.id) throw new Error('লগইন সেশন পাওয়া যায়নি');
-
-    const payload={
-      ...r,
-      amount:Number(r.amount),
-      created_by:me.id,
-      idem_key:k
-    };
-
-    const {data,error}=await db
-      .from('transactions')
-      .insert(payload)
-      .select('*,members(full_name,member_no)')
-      .single();
-
-    if(error){
-      console.error('Transaction Error:',error);
-      throw new Error(
-        error.message+
-        '\nCode: '+error.code+
-        '\nDetails: '+error.details+
-        '\nHint: '+error.hint
-      );
-    }
-
-    toast('লেনদেন সফলভাবে সংরক্ষিত হয়েছে');
-    receipt(data);
-    go(cur);
-
-  } catch(err) {
-    console.error(err);
-    alert('লেনদেন ব্যর্থ হয়েছে:\n\n'+err.message);
-    throw err;
-  }
-}
+ FH[id]=async ev=>{const b=ev.target.querySelector('button');b.disabled=true;
+  try{if(!navigator.onLine)throw new Error('ইন্টারনেট নেই; লেনদেন সার্ভারে সংরক্ষিত হয়নি');await fn(Object.fromEntries(new FormData(ev.target)),k);k=crypto.randomUUID();ev.target.reset()}catch(x){toast(x.message,1)}b.disabled=false};return h}
+async function addTxn(r,k){const t=ck(await db.from('transactions').insert({...r,idem_key:k,created_by:me.id}).select('*,members(full_name,member_no)').single());
+ if(t.status=='pending')toast('উত্তোলন অনুমোদনের অপেক্ষায়');else toast('সংরক্ষিত হয়েছে');receipt(t);go(cur)}
 function receipt(t){const m=$('#modal');m.hidden=false;m.innerHTML=`<div class="card pr"><h2 style="text-align:center;color:#14532d;margin:0">প্রবাস ঐক্য সমিতি</h2><p style="text-align:center">ঐক্যে সঞ্চয়, বিশ্বাসে সমৃদ্ধি।</p><hr>
 <p>রসিদ নং: <b>${e(t.receipt_no)}</b><br>তারিখ: ${dt(t.txn_date)}<br>সদস্য: ${e(t.members?.full_name||'-')} (আইডি: ${t.members?.member_no??'-'})<br>ধরন: ${TY[t.type]}<br>পরিমাণ: <b>${tk(t.amount)}</b><br>স্থিতি: ${t.status=='approved'?'অনুমোদিত':'অনুমোদনের অপেক্ষায়'}<br>গ্রহণকারী: ${e(me.username)}<br>অনুমোদনকারী: ${t.approved_by?e(me.username):'-'}</p>
 <div class="np"><button class="btn" onclick="print()">প্রিন্ট</button> <button class="btn alt" onclick="$('#modal').hidden=true">বন্ধ করুন</button></div></div>`}
@@ -86,7 +52,7 @@ async loan(){const L=ck(await db.from('loans').select('*,members(full_name)').or
  return form('lf2',[['member_id','সদস্য','select',await mOpts()],['principal','ঋণের পরিমাণ (৳)','number'],['purpose','উদ্দেশ্য','text'],['term','মেয়াদ (মাস)','number'],['rate','বার্ষিক মুনাফার হার (%)','number']],'ঋণের আবেদন',async d=>{const p=+d.principal,n=Math.round(d.term),tot=Math.round(p*(1+d.rate/100*n/12)),inst=Math.ceil(tot/n);
   const l=ck(await db.from('loans').insert({member_id:d.member_id,principal:p,purpose:d.purpose,term_months:n,interest_rate:+d.rate,total_payable:tot,monthly_installment:inst,created_by:me.id}).select().single());
   ck(await db.from('loan_installments').insert([...Array(n)].map((_,i)=>{const x=new Date();x.setMonth(x.getMonth()+i+1);return{loan_id:l.id,seq:i+1,due_date:x.toISOString().slice(0,10),amount_due:i<n-1?inst:tot-inst*(n-1)}})));toast('আবেদন সংরক্ষিত');go('loan')})
- +form('rf',[['loan_id','চলমান ঋণ','select',opts(run,'id',l=>`#${l.loan_no} ${l.members?.full_name} (বকেয়া ${Math.max(l.total_payable-paid(l.id),0)})`)],['account_id','হিসাব','select',ao],['amount','কিস্তির পরিমাণ (৳)','number'],['txn_date','তারিখ','date']],'কিস্তি জমা',async(d,k)=>{const l=run.find(x=>x.id==d.loan_id);if(!l)throw new Error('চলমান ঋণ পাওয়া যায়নি');const outstanding=Math.max(Number(l.total_payable)-paid(l.id),0);if(Number(d.amount)>outstanding)throw new Error('বকেয়ার চেয়ে বেশি কিস্তি জমা দেওয়া যাবে না');await addTxn({...d,type:'loan_repayment',member_id:l.member_id},k);if(paid(l.id)+ +d.amount>=l.total_payable)ck(await db.from('loans').update({status:'completed'}).eq('id',l.id))})
+ +form('rf',[['loan_id','চলমান ঋণ','select',opts(run,'id',l=>`#${l.loan_no} ${l.members?.full_name} (বকেয়া ${Math.max(l.total_payable-paid(l.id),0)})`)],['account_id','হিসাব','select',ao],['amount','কিস্তির পরিমাণ (৳)','number'],['txn_date','তারিখ','date']],'কিস্তি জমা',async(d,k)=>{const l=run.find(x=>x.id==d.loan_id);await addTxn({...d,type:'loan_repayment',member_id:l.member_id},k);if(paid(l.id)+ +d.amount>=l.total_payable)ck(await db.from('loans').update({status:'completed'}).eq('id',l.id))})
  +`<label>বিতরণের হিসাব<select id="dac">${ao}</select></label>`+tbl(['নং','সদস্য','ঋণ','পরিশোধযোগ্য','কিস্তি','পরিশোধিত','বকেয়া','অবস্থা',''],L.map(l=>[l.loan_no,e(l.members?.full_name),tk(l.principal),tk(l.total_payable),tk(l.monthly_installment),tk(paid(l.id)),tk(Math.max(l.total_payable-paid(l.id),0)),ST[l.status],l.status=='applied'?`<button class="btn sm" onclick="loanAct('${l.id}','approve')">অনুমোদন</button><button class="btn sm alt" onclick="loanAct('${l.id}','cancel')">বাতিল</button>`:l.status=='approved'?`<button class="btn sm" onclick="loanAct('${l.id}','disb')">বিতরণ</button>`:'']))},
 async inex(){return form('ief',[['type','ধরন','select','<optgroup label="আয়"><option value="income">আয়</option></optgroup><optgroup label="ব্যয়"><option value="expense">ব্যয়</option></optgroup>'],['category','খাত','select','<option>সদস্য ভর্তি ফি</option><option>জরিমানা</option><option>অন্যান্য আয়</option><option>অফিস খরচ</option><option>যাতায়াত খরচ</option><option>ব্যাংক চার্জ</option><option>অন্যান্য ব্যয়</option>'],['account_id','হিসাব','select',await aOpts()],['amount','পরিমাণ (৳)','number'],['txn_date','তারিখ','date'],['note','বিবরণ','text'],['proof_url','রসিদ/প্রমাণের লিংক (ঐচ্ছিক)','url','opt']],'সংরক্ষণ',(d,k)=>{if(d.proof_url==='')delete d.proof_url;return addTxn(d,k)})+await recent(['income','expense'])},
 async cash(){const B=ck(await db.from('account_balances').select('*')),ao=await aOpts();
@@ -114,51 +80,13 @@ window.csv=()=>dl('report.csv','\ufeff'+['তারিখ,রসিদ,ধরন
 window.backup=async()=>{const o={};for(const t of['members','accounts','loans','loan_installments','transactions','notices','audit_log'])o[t]=ck(await db.from(t).select('*'));dl(`backup-${today()}.json`,JSON.stringify(o),'application/json')};
 window.out=async()=>{await db.auth.signOut();location.reload()};
 function arm(){clearTimeout(idle);idle=setTimeout(()=>{toast('নিষ্ক্রিয়তার কারণে সেশন শেষ',1);out()},15*60000)}
-async function boot(){const{data:{session}}=await db.auth.getSession();if(!session){
-  $('#app').hidden=true;
-  $('#login').hidden=false;
-  return;
-}
- const pr=await db.from('profiles').select('*').eq('id',session.user.id).single();if(pr.error){await db.auth.signOut();throw pr.error}const p=pr.data;if(!p||!p.is_active){await db.auth.signOut();return toast('অ্যাকাউন্ট সক্রিয় নয়',1)}
+async function boot(){const{data:{session}}=await db.auth.getSession();if(!session)return;
+ const p=(await db.from('profiles').select('*').eq('id',session.user.id).single()).data;if(!p||!p.is_active){await db.auth.signOut();return toast('অ্যাকাউন্ট সক্রিয় নয়',1)}
  me=p;staff=p.role!='member';$('#login').hidden=true;$('#app').hidden=false;$('#nav').innerHTML=MENU.filter(m=>staff||!m[2]).map(m=>`<a data-v="${m[0]}" onclick="go('${m[0]}')">${m[1]}</a>`).join('')+'<a onclick="out()">লগআউট</a>';
  ['click','keydown','touchstart'].forEach(v=>addEventListener(v,arm));arm();go('dash')}
-$('#lf').onsubmit = async ev => {
-  ev.preventDefault();
-
-  const d = new FormData(ev.target);
-  const b = ev.target.querySelector('button');
-  b.disabled = true;
-
-  try {
-    const email = d.get('u').trim().toLowerCase();
-    const password = d.get('p');
-
-    const { data, error } = await db.auth.signInWithPassword({
-      email: email,
-      password: password
-    });
-
-    if (error) throw error;
-
-    const { data: profile, error: pe } = await db
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
-
-    if (pe) throw pe;
-    if (!profile || !profile.is_active)
-      throw new Error('Admin Profile পাওয়া যায়নি বা নিষ্ক্রিয়');
-
-    await boot();
-
-  } catch (err) {
-    toast('Login Error: ' + err.message, true);
-    console.error(err);
-  }
-
-  b.disabled = false;
-};
+$('#lf').onsubmit=async ev=>{ev.preventDefault();const d=new FormData(ev.target),b=ev.target.querySelector('button');b.disabled=true;
+ const r=await db.auth.signInWithPassword({email:d.get('u').trim().toLowerCase()+'@proboshoikko.local',password:d.get('p')});b.disabled=false;
+ if(r.error)return toast('ইউজারনেম বা পাসওয়ার্ড ভুল',1);boot()};
 $('#mb').onclick=()=>$('#nav').classList.toggle('open');
 addEventListener('beforeinstallprompt',ev=>{ev.preventDefault();dip=ev;$('#inst').hidden=false});$('#inst').onclick=()=>{dip.prompt();$('#inst').hidden=true};
 if('serviceWorker'in navigator)navigator.serviceWorker.register('service-worker.js').then(r=>r.addEventListener('updatefound',()=>{const w=r.installing;w.addEventListener('statechange',()=>{if(w.state=='installed'&&navigator.serviceWorker.controller){$('#upd').hidden=false;$('#updb').onclick=()=>{w.postMessage('skip');location.reload()}}})}));
