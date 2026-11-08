@@ -46,3 +46,9 @@ create policy "Members update own member profile" on public.members
 for update to authenticated
 using (id = (select member_id from public.profiles where id=auth.uid() and role='member' and is_active=true))
 with check (id = (select member_id from public.profiles where id=auth.uid() and role='member' and is_active=true));
+
+-- Allow browsers to read profile photos from the public bucket.
+drop policy if exists "Public read member photos" on storage.objects;
+create policy "Public read member photos" on storage.objects
+for select to public
+using (bucket_id = 'member-photos');
