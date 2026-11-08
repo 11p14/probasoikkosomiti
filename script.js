@@ -51,7 +51,7 @@ async dash(){
  async profile(){
   if(!me.member_id)return `<div class="card"><b>প্রোফাইল পাওয়া যায়নি</b><p>অ্যাডমিনের কাছে আপনার সদস্য রেকর্ড সংযুক্ত করতে বলুন।</p></div>`;
   const m=ck(await db.from('members').select('*').eq('id',me.member_id).single());
-  const photo=m.photo_url?`<img class="avatar" src="${e(m.photo_url)}${m.photo_url.includes('?')?'&':'?'}v=${Date.now()}" alt="প্রোফাইল ছবি" onerror="this.onerror=null;this.src='';this.alt='ছবি লোড হয়নি'">`:`<div class="avatar placeholder">${e((m.full_name||'?').slice(0,1))}</div>`;
+  const photo=m.photo_url?`<div class="profile-photo-wrap"><img class="avatar" src="${e(m.photo_url)}${m.photo_url.includes('?')?'&':'?'}v=${Date.now()}" alt="প্রোফাইল ছবি" onerror="this.style.display='none';this.nextElementSibling.hidden=false"><div class="avatar placeholder" hidden>ছবি</div></div>`:`<div class="profile-photo-wrap"><div class="avatar placeholder">${e((m.full_name||'?').slice(0,1))}</div></div>`;
   const row=(label,val)=>`<div class="profile-row"><span>${label}</span><b>${e(val||'—')}</b></div>`;
   FH.pedit=async ev=>{const b=ev.target.querySelector('button');b.disabled=true;try{
    const d=Object.fromEntries(new FormData(ev.target));const file=d.photo;delete d.photo;delete d.full_name;delete d.permanent_address;delete d.join_date;delete d.monthly_saving;delete d.member_no;delete d.email;
