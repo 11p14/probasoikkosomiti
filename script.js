@@ -51,12 +51,12 @@ async dash(){
  async profile(){
   if(!me.member_id)return `<div class="card"><b>প্রোফাইল পাওয়া যায়নি</b><p>অ্যাডমিনের কাছে আপনার সদস্য রেকর্ড সংযুক্ত করতে বলুন।</p></div>`;
   const m=ck(await db.from('members').select('*').eq('id',me.member_id).single());
-  const photo=m.photo_url?`<img class="avatar" src="${e(m.photo_url)}" alt="প্রোফাইল ছবি">`:`<div class="avatar placeholder">${e((m.full_name||'?').slice(0,1))}</div>`;
+  const photo=m.photo_url?`<img class="avatar" src="${e(m.photo_url)}${m.photo_url.includes('?')?'&':'?'}v=${Date.now()}" alt="প্রোফাইল ছবি" onerror="this.onerror=null;this.src='';this.alt='ছবি লোড হয়নি'">`:`<div class="avatar placeholder">${e((m.full_name||'?').slice(0,1))}</div>`;
   const row=(label,val)=>`<div class="profile-row"><span>${label}</span><b>${e(val||'—')}</b></div>`;
   FH.pedit=async ev=>{const b=ev.target.querySelector('button');b.disabled=true;try{
    const d=Object.fromEntries(new FormData(ev.target));const file=d.photo;delete d.photo;delete d.full_name;delete d.permanent_address;delete d.join_date;delete d.monthly_saving;delete d.member_no;delete d.email;
    Object.keys(d).forEach(k=>{if(d[k]==='')delete d[k]});
-   if(file&&file.size){if(file.size>2*1024*1024)throw new Error('ছবির আকার ২ MB-এর বেশি হতে পারবে না');const ext=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';const path=`${me.member_id}/${crypto.randomUUID()}.${ext}`;const up=await db.storage.from('member-photos').upload(path,file,{contentType:file.type||'image/jpeg',upsert:false});if(up.error)throw up.error;const pub=db.storage.from('member-photos').getPublicUrl(path);d.photo_url=pub.data.publicUrl}
+   if(file&&file.size){if(file.size>2*1024*1024)throw new Error('ছবির আকার ২ MB-এর বেশি হতে পারবে না');const ext=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';const path=`${me.member_id}/${crypto.randomUUID()}.${ext}`;const up=await db.storage.from('member-photos').upload(path,file,{contentType:file.type||'image/jpeg',upsert:false});if(up.error)throw up.error;const pub=db.storage.from('member-photos').getPublicUrl(path);if(!pub.data?.publicUrl)throw new Error('ছবির public URL তৈরি হয়নি');d.photo_url=pub.data.publicUrl}
    const r=await db.from('members').update(d).eq('id',me.member_id);if(r.error)throw r.error;toast('প্রোফাইল আপডেট হয়েছে');go('profile');
   }catch(x){toast(x.message,1)}finally{b.disabled=false}};
   const val=(x)=>e(x||'');
