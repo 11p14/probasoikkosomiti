@@ -24,18 +24,36 @@ async function addTxn(r,k){const t=ck(await db.from('transactions').insert({...r
 function receipt(t){const m=$('#modal');m.hidden=false;m.innerHTML=`<div class="card pr"><h2 style="text-align:center;color:#14532d;margin:0">প্রবাস ঐক্য সমিতি</h2><p style="text-align:center">ঐক্যে সঞ্চয়, বিশ্বাসে সমৃদ্ধি।</p><hr>
 <p>রসিদ নং: <b>${e(t.receipt_no)}</b><br>তারিখ: ${dt(t.txn_date)}<br>সদস্য: ${e(t.members?.full_name||'-')} (আইডি: ${t.members?.member_no??'-'})<br>ধরন: ${TY[t.type]}<br>পরিমাণ: <b>${tk(t.amount)}</b><br>স্থিতি: ${t.status=='approved'?'অনুমোদিত':'অনুমোদনের অপেক্ষায়'}<br>গ্রহণকারী: ${e(me.username)}<br>অনুমোদনকারী: ${t.approved_by?e(me.username):'-'}</p>
 <div class="np"><button class="btn" onclick="print()">প্রিন্ট</button> <button class="btn alt" onclick="$('#modal').hidden=true">বন্ধ করুন</button></div></div>`}
-const MENU=[['dash','ড্যাশবোর্ড',0],['mem','সদস্য ব্যবস্থাপনা',1],['sav','সঞ্চয় ব্যবস্থাপনা',1],['wd','উত্তোলন',1],['loan','ঋণ ব্যবস্থাপনা',1],['inex','আয়-ব্যয়',1],['cash','ক্যাশ ও ব্যাংক',1],['rep','রিপোর্ট',0],['notice','নোটিশ',0],['set','সেটিংস',0]];
+const MENU=[['dash','ড্যাশবোর্ড',0],['profile','আমার প্রোফাইল',0],['mem','সদস্য ব্যবস্থাপনা',1],['sav','সঞ্চয় ব্যবস্থাপনা',1],['wd','উত্তোলন',1],['loan','ঋণ ব্যবস্থাপনা',1],['inex','আয়-ব্যয়',1],['cash','ক্যাশ ও ব্যাংক',1],['rep','রিপোর্ট',1],['notice','নোটিশ',0],['set','সেটিংস',0]];
 let cur='dash';
 async function go(v){cur=v;$('#nav').classList.remove('open');document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));$('#main').innerHTML='লোড হচ্ছে…';
  try{$('#main').innerHTML=await V[v]();}catch(x){$('#main').innerHTML='';toast(x.message,1)}}
 const V={
-async dash(){const T=ck(await db.from('transactions').select('*,members(full_name)').eq('status','approved').order('created_at',{ascending:false}));
+async dash(){
+ if(!staff){
+  if(!me.member_id)return `<div class="card"><b>প্রোফাইল সংযুক্ত হয়নি</b><p>অ্যাডমিনের সঙ্গে যোগাযোগ করুন।</p></div>`;
+  const T=ck(await db.from('transactions').select('*,members(full_name)').eq('member_id',me.member_id).eq('status','approved').order('created_at',{ascending:false}));
+  const L=ck(await db.from('loans').select('*').eq('member_id',me.member_id).in('status',['approved','disbursed','running','completed']));
+  const ids=L.map(x=>x.id),I=ids.length?ck(await db.from('loan_installments').select('*').in('loan_id',ids).order('due_date')):[];
+  const dep=T.filter(x=>['saving_deposit','extra_deposit','special_deposit'].includes(x.type)).reduce((a,x)=>a+Number(x.amount),0),wd=T.filter(x=>x.type==='withdrawal').reduce((a,x)=>a+Number(x.amount),0);
+  const paid=id=>T.filter(x=>x.type==='loan_repayment'&&x.loan_id===id).reduce((a,x)=>a+Number(x.amount),0), total=L.reduce((a,x)=>a+Number(x.principal||0),0),running=L.filter(x=>x.status==='running');
+  const outstanding=L.filter(x=>['approved','disbursed','running'].includes(x.status)).reduce((a,x)=>a+Math.max(Number(x.total_payable||0)-paid(x.id),0),0),next=I.find(x=>x.due_date>=today()&&Number(x.amount_due||0)>0);
+  const c=[`মোট জমা|${tk(dep)}`,`মোট উত্তোলন|${tk(wd)}`,`মোট সঞ্চয়|${tk(dep-wd)}`,`মোট ঋণ|${tk(total)}`,`চলমান ঋণ|${tk(running.reduce((a,x)=>a+Number(x.principal||0),0))}`,`বকেয়া ঋণ|${tk(outstanding)}`,`আসন্ন কিস্তি|${next?dt(next.due_date):'নেই'}`];
+  return `<div class="card"><b>স্বাগতম, ${e(me.username||'সদস্য')}</b><p>আপনার ব্যক্তিগত হিসাবের সারাংশ</p></div><div class="grid">${c.map(x=>{const[a,b]=x.split('|');return`<div class="stat">${a}<b>${b}</b></div>`}).join('')}</div><h3>সাম্প্রতিক নিজের লেনদেন</h3>${txTbl(T.slice(0,10))}`;
+ }
+ const T=ck(await db.from('transactions').select('*,members(full_name)').eq('status','approved').order('created_at',{ascending:false}));
  const s=t=>T.filter(x=>[].concat(t).includes(x.type)).reduce((a,x)=>a+Number(x.amount),0),dep=s(['saving_deposit','extra_deposit','special_deposit']),wd=s('withdrawal'),mo=today().slice(0,7),ms=t=>T.filter(x=>x.type==t&&x.txn_date.startsWith(mo)).reduce((a,x)=>a+Number(x.amount),0);
  let c=[`মোট জমা|${tk(dep)}`,`মোট উত্তোলন|${tk(wd)}`,`মোট সঞ্চয়|${tk(dep-wd)}`];
- if(staff){const M=ck(await db.from('members').select('status')),L=ck(await db.from('loans').select('total_payable,status')),B=ck(await db.from('account_balances').select('balance')),dis=s('loan_disbursement'),rep=s('loan_repayment'),due=L.filter(l=>['running','completed'].includes(l.status)).reduce((a,l)=>a+Number(l.total_payable),0)-rep;
-  c=[`মোট সদস্য|${M.length}`,`সক্রিয় সদস্য|${M.filter(x=>x.status=='active').length}`,...c,`ঋণ বিতরণ|${tk(dis)}`,`ঋণ আদায়|${tk(rep)}`,`বকেয়া ঋণ|${tk(Math.max(due,0))}`,`নগদ ব্যালেন্স|${tk(B.reduce((a,x)=>a+Number(x.balance),0))}`,`চলতি মাসের আয়|${tk(ms('income'))}`,`চলতি মাসের ব্যয়|${tk(ms('expense'))}`]}
+ const M=ck(await db.from('members').select('status')),L=ck(await db.from('loans').select('total_payable,status')),B=ck(await db.from('account_balances').select('balance')),dis=s('loan_disbursement'),rep=s('loan_repayment'),due=L.filter(l=>['running','completed'].includes(l.status)).reduce((a,l)=>a+Number(l.total_payable),0)-rep;
+ c=[`মোট সদস্য|${M.length}`,`সক্রিয় সদস্য|${M.filter(x=>x.status=='active').length}`,...c,`ঋণ বিতরণ|${tk(dis)}`,`ঋণ আদায়|${tk(rep)}`,`বকেয়া ঋণ|${tk(Math.max(due,0))}`,`নগদ ব্যালেন্স|${tk(B.reduce((a,x)=>a+Number(x.balance),0))}`,`চলতি মাসের আয়|${tk(ms('income'))}`,`চলতি মাসের ব্যয়|${tk(ms('expense'))}`];
  const N=ck(await db.from('notices').select('*').eq('is_important',true).order('published_on',{ascending:false}).limit(3));
  return `${N.map(n=>`<div class="card"><b>📌 ${e(n.title)}</b> (${dt(n.published_on)})<br>${e(n.body)}</div>`).join('')}<div class="grid">${c.map(x=>{const[a,b]=x.split('|');return`<div class="stat">${a}<b>${b}</b></div>`}).join('')}</div><h3>সাম্প্রতিক ১০টি লেনদেন</h3>${txTbl(T.slice(0,10))}`},
+ async profile(){
+  if(!me.member_id)return `<div class="card"><b>প্রোফাইল পাওয়া যায়নি</b><p>অ্যাডমিনের কাছে আপনার সদস্য রেকর্ড সংযুক্ত করতে বলুন।</p></div>`;
+  const m=ck(await db.from('members').select('*').eq('id',me.member_id).single());
+  const photo=m.photo_url?`<img class="avatar" src="${e(m.photo_url)}" alt="প্রোফাইল ছবি">`:`<div class="avatar placeholder">${e((m.full_name||'?').slice(0,1))}</div>`;
+  const row=(label,val)=>`<div class="profile-row"><span>${label}</span><b>${e(val||'—')}</b></div>`;
+  return `<div class="card profile-card">${photo}<h2>${e(m.full_name)}</h2><p>সদস্য নং: <b>${e(m.member_no)}</b></p><div class="profile-grid">${row('মোবাইল',m.mobile)}${row('ইমেইল',m.email)}${row('পিতার নাম',m.father_name)}${row('মাতার নাম',m.mother_name)}${row('বর্তমান ঠিকানা',m.present_address)}${row('স্থায়ী ঠিকানা',m.permanent_address)}${row('পেশা',m.occupation)}${row('প্রবাসের দেশ',m.abroad_country)}${row('কর্মস্থল',m.workplace)}${row('যোগদানের তারিখ',dt(m.join_date))}${row('মাসিক সঞ্চয়',tk(m.monthly_saving))}</div></div>`},
 async mem(){const M=ck(await db.from('members').select('*').order('member_no')),T=ck(await db.from('transactions').select('member_id,type,amount').eq('status','approved'));
  const bal=id=>T.filter(t=>t.member_id==id).reduce((a,t)=>a+(t.type=='withdrawal'?-t.amount:['saving_deposit','extra_deposit','special_deposit'].includes(t.type)?+t.amount:0),0);
  const f=me.role=='super_admin'?form('mf',[['full_name','পূর্ণ নাম','text'],['father_name','পিতার নাম','text','opt'],['mother_name','মাতার নাম','text','opt'],['mobile','মোবাইল নম্বর','tel'],['email','ইমেইল (ঐচ্ছিক)','email','opt'],['nid','জাতীয় পরিচয়পত্র নং','text','opt'],['present_address','বর্তমান ঠিকানা','text','opt'],['permanent_address','স্থায়ী ঠিকানা','text','opt'],['occupation','পেশা','text','opt'],['abroad_country','প্রবাসের দেশ','text','opt'],['workplace','কর্মস্থল','text','opt'],['join_date','যোগদানের তারিখ','date'],['monthly_saving','মাসিক সঞ্চয় (৳)','number']],'সদস্য যোগ করুন',async d=>{Object.keys(d).forEach(k=>d[k]===''&&delete d[k]);ck(await db.from('members').insert({...d,created_by:me.id}));toast('সদস্য যোগ হয়েছে');go('mem')}):'';
@@ -78,22 +96,7 @@ window.rej=async id=>{try{ck(await db.from('transactions').update({status:'rejec
 const dl=(n,t,m)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click()};
 window.csv=()=>dl('report.csv','\ufeff'+['তারিখ,রসিদ,ধরন,সদস্য,পরিমাণ,বিবরণ',...(window.RR||[]).map(t=>[dt(t.txn_date),t.receipt_no,TY[t.type],t.members?.full_name||'',t.amount,t.note||''].map(x=>`"${String(x).replace(/"/g,'""')}"`).join(','))].join('\n'),'text/csv');
 window.backup=async()=>{const o={};for(const t of['members','accounts','loans','loan_installments','transactions','notices','audit_log'])o[t]=ck(await db.from(t).select('*'));dl(`backup-${today()}.json`,JSON.stringify(o),'application/json')};
-window.out = async () => {
-  try {
-    await db.auth.signOut();
-  } catch (err) {
-    console.warn('Remote sign out failed:', err);
-  }
-
-  for (const key of Object.keys(localStorage)) {
-    if (key.includes('auth-token')) {
-      localStorage.removeItem(key);
-    }
-  }
-
-  location.reload();
-};
-
+window.out=async()=>{await db.auth.signOut();location.reload()};
 function arm(){clearTimeout(idle);idle=setTimeout(()=>{toast('নিষ্ক্রিয়তার কারণে সেশন শেষ',1);out()},15*60000)}
 async function boot(){const{data:{session}}=await db.auth.getSession();if(!session)return;
  const q=await db.from('profiles').select('*').eq('id',session.user.id).single(),p=q.data;if(!p||!p.is_active){await db.auth.signOut();return toast('প্রোফাইল পাওয়া যায়নি বা নিষ্ক্রিয়: '+(q.error?.message||'profiles টেবিলে এই ইউজারের সারি নেই'),1)}
