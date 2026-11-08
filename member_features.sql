@@ -52,3 +52,14 @@ drop policy if exists "Public read member photos" on storage.objects;
 create policy "Public read member photos" on storage.objects
 for select to public
 using (bucket_id = 'member-photos');
+
+-- Super admins may upload/update member profile photos from the admin detail screen.
+drop policy if exists "Super admins upload member photos" on storage.objects;
+create policy "Super admins upload member photos" on storage.objects
+for insert to authenticated
+with check (bucket_id='member-photos' and exists (select 1 from public.profiles where id=auth.uid() and role='super_admin' and is_active=true));
+drop policy if exists "Super admins update member photos" on storage.objects;
+create policy "Super admins update member photos" on storage.objects
+for update to authenticated
+using (bucket_id='member-photos' and exists (select 1 from public.profiles where id=auth.uid() and role='super_admin' and is_active=true))
+with check (bucket_id='member-photos' and exists (select 1 from public.profiles where id=auth.uid() and role='super_admin' and is_active=true));
