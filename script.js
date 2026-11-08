@@ -24,7 +24,7 @@ async function addTxn(r,k){const t=ck(await db.from('transactions').insert({...r
 function receipt(t){const m=$('#modal');m.hidden=false;m.innerHTML=`<div class="card pr"><h2 style="text-align:center;color:#14532d;margin:0">প্রবাস ঐক্য সমিতি</h2><p style="text-align:center">ঐক্যে সঞ্চয়, বিশ্বাসে সমৃদ্ধি।</p><hr>
 <p>রসিদ নং: <b>${e(t.receipt_no)}</b><br>তারিখ: ${dt(t.txn_date)}<br>সদস্য: ${e(t.members?.full_name||'-')} (আইডি: ${t.members?.member_no??'-'})<br>ধরন: ${TY[t.type]}<br>পরিমাণ: <b>${tk(t.amount)}</b><br>স্থিতি: ${t.status=='approved'?'অনুমোদিত':'অনুমোদনের অপেক্ষায়'}<br>গ্রহণকারী: ${e(me.username)}<br>অনুমোদনকারী: ${t.approved_by?e(me.username):'-'}</p>
 <div class="np"><button class="btn" onclick="print()">প্রিন্ট</button> <button class="btn alt" onclick="$('#modal').hidden=true">বন্ধ করুন</button></div></div>`}
-const MENU=[['dash','ড্যাশবোর্ড',0],['profile','আমার প্রোফাইল',0],['mem','সদস্য ব্যবস্থাপনা',1],['sav','সঞ্চয় ব্যবস্থাপনা',1],['wd','উত্তোলন',1],['loan','ঋণ ব্যবস্থাপনা',1],['inex','আয়-ব্যয়',1],['cash','ক্যাশ ও ব্যাংক',1],['rep','রিপোর্ট',1],['notice','নোটিশ',0],['set','সেটিংস',0]];
+const MENU=[['dash','ড্যাশবোর্ড',0],['profile','আমার প্রোফাইল',0],['memberpay','সঞ্চয়/কিস্তি জমা',0],['memberloan','ঋণের আবেদন',0],['mem','সদস্য ব্যবস্থাপনা',1],['sav','সঞ্চয় ব্যবস্থাপনা',1],['wd','উত্তোলন',1],['loan','ঋণ ব্যবস্থাপনা',1],['inex','আয়-ব্যয়',1],['cash','ক্যাশ ও ব্যাংক',1],['rep','রিপোর্ট',1],['notice','নোটিশ',0],['set','সেটিংস',0]];
 let cur='dash';
 async function go(v){cur=v;$('#nav').classList.remove('open');document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));$('#main').innerHTML='লোড হচ্ছে…';
  try{$('#main').innerHTML=await V[v]();}catch(x){$('#main').innerHTML='';toast(x.message,1)}}
@@ -66,6 +66,23 @@ async mem(){const M=ck(await db.from('members').select('*').order('member_no')),
  const f=me.role=='super_admin'?form('mf',[['full_name','পূর্ণ নাম','text'],['father_name','পিতার নাম','text','opt'],['mother_name','মাতার নাম','text','opt'],['mobile','মোবাইল নম্বর','tel'],['email','ইমেইল (ঐচ্ছিক)','email','opt'],['nid','জাতীয় পরিচয়পত্র নং','text','opt'],['present_address','বর্তমান ঠিকানা','text','opt'],['permanent_address','স্থায়ী ঠিকানা','text','opt'],['occupation','পেশা','text','opt'],['abroad_country','প্রবাসের দেশ','text','opt'],['workplace','কর্মস্থল','text','opt'],['join_date','যোগদানের তারিখ','date'],['monthly_saving','মাসিক সঞ্চয় (৳)','number']],'সদস্য যোগ করুন',async d=>{Object.keys(d).forEach(k=>d[k]===''&&delete d[k]);ck(await db.from('members').insert({...d,created_by:me.id}));toast('সদস্য যোগ হয়েছে');go('mem')}):'';
  return `${f}<input id="q" placeholder="সদস্য খুঁজুন…" oninput="document.querySelectorAll('#mt tr+tr').forEach(r=>r.hidden=!r.textContent.includes(this.value))"><br><br><div id="mt">${tbl(['আইডি','নাম','মোবাইল','পেশা','মাসিক','সঞ্চয়','অবস্থা','স্টেটমেন্ট'],M.map(m=>[m.member_no,e(m.full_name),e(m.mobile),e(m.occupation),tk(m.monthly_saving),tk(bal(m.id)),m.status=='active'?'সক্রিয়':'নিষ্ক্রিয়',`<button class="btn sm" onclick="memberView('${m.id}')">View</button>`]))}</div>`},
 
+
+async memberPay(){
+ if(!me.member_id)return `<div class="card">প্রোফাইল সংযুক্ত হয়নি।</div>`;
+ const L=ck(await db.from('loans').select('*').eq('member_id',me.member_id).in('status',['running','approved','disbursed']).order('created_at',{ascending:false}));
+ const ao=await aOpts();
+ const loanOpts=opts(L,'id',l=>`#${l.loan_no} — বকেয়া ${tk(l.total_payable)}`);
+ const savings=form('mspay',[['ref_no','ট্রানজেকশন আইডি','text'],['amount','পরিমাণ (৳)','number'],['txn_date','তারিখ','date'],['account_id','জমার মাধ্যম','select',ao]],'সঞ্চয় জমা সাবমিট',async(d,k)=>{await addTxn({...d,type:'saving_deposit',member_id:me.member_id,status:'pending'},k);toast('এডমিন অনুমোদনের অপেক্ষায় আছে')});
+ const repayment=L.length?form('mlpay',[['loan_id','ঋণ','select',loanOpts],['ref_no','ট্রানজেকশন আইডি','text'],['amount','কিস্তির পরিমাণ (৳)','number'],['txn_date','তারিখ','date'],['account_id','জমার মাধ্যম','select',ao]],'কিস্তি জমা সাবমিট',async(d,k)=>{await addTxn({...d,type:'loan_repayment',member_id:me.member_id,status:'pending'},k);toast('কিস্তি এডমিন অনুমোদনের অপেক্ষায় আছে')}):`<div class="card">আপনার কোনো চলমান ঋণ নেই।</div>`;
+ const P=ck(await db.from('transactions').select('*').eq('member_id',me.member_id).in('type',['saving_deposit','loan_repayment']).order('created_at',{ascending:false}).limit(10));
+ return `<div class="card"><b>সঞ্চয় বা কিস্তি জমা</b><p>তথ্য সাবমিট করার পর এডমিন অনুমোদন করলে হিসাব আপডেট হবে।</p></div>${savings}${repayment}<h3>আপনার জমা দেওয়া অনুরোধ</h3>${tbl(['তারিখ','ধরন','ট্রানজেকশন আইডি','পরিমাণ','অবস্থা'],P.map(x=>[dt(x.txn_date),TY[x.type],e(x.ref_no),tk(x.amount),x.status==='approved'?'অনুমোদিত':x.status==='rejected'?'বাতিল':'অপেক্ষমাণ']))}`;
+},
+async memberLoan(){
+ if(!me.member_id)return `<div class="card">প্রোফাইল সংযুক্ত হয়নি।</div>`;
+ const f=form('mloan',[['principal','ঋণের পরিমাণ (৳)','number'],['purpose','ঋণের উদ্দেশ্য','text'],['term','মেয়াদ (মাস)','number'],['rate','বার্ষিক মুনাফার হার (%)','number']], 'ঋণের আবেদন সাবমিট',async d=>{const p=+d.principal,n=Math.round(d.term),rate=+d.rate;if(!p||!n)throw new Error('ঋণের পরিমাণ ও মেয়াদ দিন');const total=Math.round(p*(1+rate/100*n/12)),inst=Math.ceil(total/n);ck(await db.from('loans').insert({member_id:me.member_id,principal:p,purpose:d.purpose,term_months:n,interest_rate:rate,total_payable:total,monthly_installment:inst,status:'applied',created_by:me.id}));toast('ঋণের আবেদন এডমিনের কাছে পাঠানো হয়েছে');go('memberloan')});
+ const L=ck(await db.from('loans').select('*').eq('member_id',me.member_id).order('created_at',{ascending:false}));
+ return `<div class="card"><b>ঋণের আবেদন</b><p>এডমিন অনুমোদন ও বিতরণ করার পর ঋণের টাকা আপনার হিসাবে লেনদেন হিসেবে দেখা যাবে।</p></div>${f}<h3>আপনার ঋণের আবেদন</h3>${tbl(['ঋণ নং','আবেদনের তারিখ','পরিমাণ','মেয়াদ','কিস্তি','অবস্থা'],L.map(l=>[e(l.loan_no),dt(l.created_at),tk(l.principal),`${l.term_months} মাস`,tk(l.monthly_installment),e({applied:'অপেক্ষমাণ',approved:'অনুমোদিত',disbursed:'বিতরণাধীন',running:'চলমান',completed:'পরিশোধিত',cancelled:'বাতিল'}[l.status]||l.status)]))}`;
+},
 async memberDetail(id){
  if(!staff)return `<div class="card">অনুমতি নেই</div>`;
  const m=ck(await db.from('members').select('*').eq('id',id).single());
