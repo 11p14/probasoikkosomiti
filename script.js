@@ -24,7 +24,7 @@ async function addTxn(r,k){const t=ck(await db.from('transactions').insert({...r
 function receipt(t){const m=$('#modal');m.hidden=false;m.innerHTML=`<div class="card pr"><h2 style="text-align:center;color:#14532d;margin:0">প্রবাস ঐক্য সমিতি</h2><p style="text-align:center">ঐক্যে সঞ্চয়, বিশ্বাসে সমৃদ্ধি।</p><hr>
 <p>রসিদ নং: <b>${e(t.receipt_no)}</b><br>তারিখ: ${dt(t.txn_date)}<br>সদস্য: ${e(t.members?.full_name||'-')} (আইডি: ${t.members?.member_no??'-'})<br>ধরন: ${TY[t.type]}<br>পরিমাণ: <b>${tk(t.amount)}</b><br>স্থিতি: ${t.status=='approved'?'অনুমোদিত':'অনুমোদনের অপেক্ষায়'}<br>গ্রহণকারী: ${e(me.username)}<br>অনুমোদনকারী: ${t.approved_by?e(me.username):'-'}</p>
 <div class="np"><button class="btn" onclick="print()">প্রিন্ট</button> <button class="btn alt" onclick="$('#modal').hidden=true">বন্ধ করুন</button></div></div>`}
-const MENU=[['dash','ড্যাশবোর্ড',0],['profile','আমার প্রোফাইল',0],['memberPay','সঞ্চয়/কিস্তি জমা',0],['memberLoan','ঋণের আবেদন',0],['mem','সদস্য ব্যবস্থাপনা',1],['sav','সঞ্চয় ব্যবস্থাপনা',1],['wd','উত্তোলন',1],['loan','ঋণ ব্যবস্থাপনা',1],['inex','আয়-ব্যয়',1],['cash','ক্যাশ ও ব্যাংক',1],['rep','রিপোর্ট',1],['notice','নোটিশ',0],['set','সেটিংস',0]];
+const MENU=[['dash','ড্যাশবোর্ড',0],['profile','আমার প্রোফাইল',0],['memberPay','সঞ্চয়/কিস্তি জমা',0],['memberLoan','ঋণের আবেদন',0],['payApprove','জমা অনুমোদন',1],['mem','সদস্য ব্যবস্থাপনা',1],['sav','সঞ্চয় ব্যবস্থাপনা',1],['wd','উত্তোলন',1],['loan','ঋণ ব্যবস্থাপনা',1],['inex','আয়-ব্যয়',1],['cash','ক্যাশ ও ব্যাংক',1],['rep','রিপোর্ট',1],['notice','নোটিশ',0],['set','সেটিংস',0]];
 let cur='dash';
 async function go(v){cur=v;$('#nav').classList.remove('open');document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));$('#main').innerHTML='লোড হচ্ছে…';
  try{$('#main').innerHTML=await V[v]();}catch(x){$('#main').innerHTML='';toast(x.message,1)}}
@@ -67,6 +67,13 @@ async mem(){const M=ck(await db.from('members').select('*').order('member_no')),
  return `${f}<input id="q" placeholder="সদস্য খুঁজুন…" oninput="document.querySelectorAll('#mt tr+tr').forEach(r=>r.hidden=!r.textContent.includes(this.value))"><br><br><div id="mt">${tbl(['আইডি','নাম','মোবাইল','পেশা','মাসিক','সঞ্চয়','অবস্থা','স্টেটমেন্ট'],M.map(m=>[m.member_no,e(m.full_name),e(m.mobile),e(m.occupation),tk(m.monthly_saving),tk(bal(m.id)),m.status=='active'?'সক্রিয়':'নিষ্ক্রিয়',`<button class="btn sm" onclick="memberView('${m.id}')">View</button>`]))}</div>`},
 
 
+
+async payApprove(){
+ if(!staff)return `<div class="card">অনুমতি নেই</div>`;
+ const P=ck(await db.from('transactions').select('*,members(full_name,member_no)').in('type',['saving_deposit','loan_repayment']).eq('status','pending').order('created_at',{ascending:false}));
+ const kind=t=>t.type==='saving_deposit'?'সঞ্চয় জমা':'ঋণের কিস্তি';
+ return `<div class="card"><b>সদস্যের জমা অনুমোদন</b><p>Approve করলে ওই লেনদেন সদস্যের সঞ্চয়/ঋণের হিসাবে গণনা হবে। Reject করলে হিসাব পরিবর্তন হবে না।</p></div>${tbl(['তারিখ','সদস্য','ধরন','ট্রানজেকশন আইডি','পরিমাণ','জমার মাধ্যম','অ্যাকশন'],P.map(t=>[dt(t.txn_date),e(t.members?.full_name||'-')+' ('+e(t.members?.member_no||'-')+')',kind(t),e(t.ref_no),tk(t.amount),e(t.account_id||'-'),`<button class="btn sm" onclick="approveMemberPayment('${t.id}')">Approve</button> <button class="btn sm alt" onclick="rejectMemberPayment('${t.id}')">Reject</button>`]))}`;
+},
 async memberPay(){
  if(!me.member_id)return `<div class="card">প্রোফাইল সংযুক্ত হয়নি।</div>`;
  const L=ck(await db.from('loans').select('*').eq('member_id',me.member_id).in('status',['running','approved','disbursed']).order('created_at',{ascending:false}));
@@ -135,6 +142,8 @@ const txTbl=(R,x)=>tbl(['তারিখ','রসিদ','ধরন','সদস�
 async function recent(ty){return '<h3>সাম্প্রতিক এন্ট্রি</h3>'+txTbl(ck(await db.from('transactions').select('*,members(full_name,member_no)').in('type',ty).order('created_at',{ascending:false}).limit(15)))+(me.role=='super_admin'?'<p><small>ভুল এন্ট্রি: নতুন সংশোধনী এন্ট্রি দিন (বিপরীত খাতে)।</small></p>':'')}
 window.stmt=async id=>{const m=ck(await db.from('members').select('*').eq('id',id).single()),T=ck(await db.from('transactions').select('*').eq('member_id',id).eq('status','approved').order('txn_date'));$('#modal').hidden=false;
  $('#modal').innerHTML=`<div class="card pr" style="max-width:700px"><h3>${e(m.full_name)} (আইডি ${m.member_no}) — স্টেটমেন্ট</h3><p>মোবাইল: ${e(m.mobile)} | ঠিকানা: ${e(m.present_address)}</p>${tbl(['তারিখ','রসিদ','ধরন','পরিমাণ'],T.map(t=>[dt(t.txn_date),t.receipt_no,TY[t.type],tk(t.amount)]))}<div class="np"><button class="btn" onclick="print()">প্রিন্ট</button> <button class="btn alt" onclick="$('#modal').hidden=true">বন্ধ</button></div></div>`};
+window.approveMemberPayment=async id=>{try{ck(await db.from('transactions').update({status:'approved',approved_by:me.id}).eq('id',id).eq('status','pending'));toast('জমা অনুমোদিত হয়েছে');go('payApprove')}catch(x){toast(x.message,1)}};
+window.rejectMemberPayment=async id=>{try{ck(await db.from('transactions').update({status:'rejected',approved_by:me.id}).eq('id',id).eq('status','pending'));toast('জমা বাতিল করা হয়েছে');go('payApprove')}catch(x){toast(x.message,1)}};
 window.memberView=async id=>{try{cur='memberDetail';$('#main').innerHTML='লোড হচ্ছে…';$('#main').innerHTML=await V.memberDetail(id)}catch(x){toast(x.message,1)}};
 window.appr=async id=>{try{ck(await db.from('transactions').update({status:'approved',approved_by:me.id}).eq('id',id));go('wd')}catch(x){toast(x.message,1)}};
 window.rej=async id=>{try{ck(await db.from('transactions').update({status:'rejected',approved_by:me.id}).eq('id',id));go('wd')}catch(x){toast(x.message,1)}};
