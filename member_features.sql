@@ -63,3 +63,17 @@ create policy "Super admins update member photos" on storage.objects
 for update to authenticated
 using (bucket_id='member-photos' and exists (select 1 from public.profiles where id=auth.uid() and role='super_admin' and is_active=true))
 with check (bucket_id='member-photos' and exists (select 1 from public.profiles where id=auth.uid() and role='super_admin' and is_active=true));
+
+-- Member self-service submissions: pending transactions and loan applications.
+drop policy if exists "Members submit own transactions" on public.transactions;
+create policy "Members submit own transactions" on public.transactions
+for insert to authenticated
+with check (member_id = (select member_id from public.profiles where id=auth.uid() and role='member' and is_active=true) and status='pending' and created_by=auth.uid());
+drop policy if exists "Members read own accounts" on public.accounts;
+create policy "Members read own accounts" on public.accounts
+for select to authenticated
+using (is_active=true);
+drop policy if exists "Members submit own loan applications" on public.loans;
+create policy "Members submit own loan applications" on public.loans
+for insert to authenticated
+with check (member_id = (select member_id from public.profiles where id=auth.uid() and role='member' and is_active=true) and status='applied' and created_by=auth.uid());
