@@ -24,7 +24,7 @@ async function addTxn(r,k){const t=ck(await db.from('transactions').insert({...r
 function receipt(t){const m=$('#modal');m.hidden=false;m.innerHTML=`<div class="card pr"><h2 style="text-align:center;color:#14532d;margin:0">প্রবাস ঐক্য সমিতি</h2><p style="text-align:center">ঐক্যে সঞ্চয়, বিশ্বাসে সমৃদ্ধি।</p><hr>
 <p>রসিদ নং: <b>${e(t.receipt_no)}</b><br>তারিখ: ${dt(t.txn_date)}<br>সদস্য: ${e(t.members?.full_name||'-')} (আইডি: ${t.members?.member_no??'-'})<br>ধরন: ${TY[t.type]}<br>পরিমাণ: <b>${tk(t.amount)}</b><br>স্থিতি: ${t.status=='approved'?'অনুমোদিত':'অনুমোদনের অপেক্ষায়'}<br>গ্রহণকারী: ${e(me.username)}<br>অনুমোদনকারী: ${t.approved_by?e(me.username):'-'}</p>
 <div class="np"><button class="btn" onclick="print()">প্রিন্ট</button> <button class="btn alt" onclick="$('#modal').hidden=true">বন্ধ করুন</button></div></div>`}
-const MENU=[['dash','ড্যাশবোর্ড',0],['profile','আমার প্রোফাইল',0],['memberpay','সঞ্চয়/কিস্তি জমা',0],['memberloan','ঋণের আবেদন',0],['mem','সদস্য ব্যবস্থাপনা',1],['sav','সঞ্চয় ব্যবস্থাপনা',1],['wd','উত্তোলন',1],['loan','ঋণ ব্যবস্থাপনা',1],['inex','আয়-ব্যয়',1],['cash','ক্যাশ ও ব্যাংক',1],['rep','রিপোর্ট',1],['notice','নোটিশ',0],['set','সেটিংস',0]];
+const MENU=[['dash','ড্যাশবোর্ড',0],['profile','আমার প্রোফাইল',0],['memberPay','সঞ্চয়/কিস্তি জমা',0],['memberLoan','ঋণের আবেদন',0],['mem','সদস্য ব্যবস্থাপনা',1],['sav','সঞ্চয় ব্যবস্থাপনা',1],['wd','উত্তোলন',1],['loan','ঋণ ব্যবস্থাপনা',1],['inex','আয়-ব্যয়',1],['cash','ক্যাশ ও ব্যাংক',1],['rep','রিপোর্ট',1],['notice','নোটিশ',0],['set','সেটিংস',0]];
 let cur='dash';
 async function go(v){cur=v;$('#nav').classList.remove('open');document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));$('#main').innerHTML='লোড হচ্ছে…';
  try{$('#main').innerHTML=await V[v]();}catch(x){$('#main').innerHTML='';toast(x.message,1)}}
@@ -145,7 +145,7 @@ window.out=async()=>{await db.auth.signOut();location.reload()};
 function arm(){clearTimeout(idle);idle=setTimeout(()=>{toast('নিষ্ক্রিয়তার কারণে সেশন শেষ',1);out()},15*60000)}
 async function boot(){const{data:{session}}=await db.auth.getSession();if(!session)return;
  const q=await db.from('profiles').select('*').eq('id',session.user.id).single(),p=q.data;if(!p||!p.is_active){await db.auth.signOut();return toast('প্রোফাইল পাওয়া যায়নি বা নিষ্ক্রিয়: '+(q.error?.message||'profiles টেবিলে এই ইউজারের সারি নেই'),1)}
- me=p;staff=p.role!='member';$('#login').hidden=true;$('#app').hidden=false;$('#nav').innerHTML=MENU.filter(m=>staff||!m[2]).map(m=>`<a data-v="${m[0]}" onclick="go('${m[0]}')">${m[1]}</a>`).join('')+'<a onclick="out()">লগআউট</a>';
+ me=p;staff=p.role!='member';$('#login').hidden=true;$('#app').hidden=false;$('#nav').innerHTML=MENU.filter(m=>(m[0]=='memberPay'||m[0]=='memberLoan')?!staff:(staff||!m[2])).map(m=>`<a data-v="${m[0]}" onclick="go('${m[0]}')">${m[1]}</a>`).join('')+'<a onclick="out()">লগআউট</a>';
  ['click','keydown','touchstart'].forEach(v=>addEventListener(v,arm));arm();go('dash')}
 $('#lf').onsubmit=async ev=>{ev.preventDefault();const d=new FormData(ev.target),b=ev.target.querySelector('button');b.disabled=true;
  const r=await db.auth.signInWithPassword({email:(u=>u.includes('@')?u:u+'@proboshoikko.local')(d.get('u').trim().toLowerCase()),password:d.get('p')});b.disabled=false;
